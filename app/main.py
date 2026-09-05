@@ -15,7 +15,9 @@ import httpx
 import pandas as pd
 import streamlit as st
 
-from app.demo_data import COURSES, GAPS, PROGRAMS, UNIVERSITY, evidence
+# Streamlit ejecuta app/main.py como script; app/ no necesita ser un paquete.
+# Importar desde el mismo directorio evita depender de cómo Streamlit configure sys.path.
+from demo_data import COURSES, GAPS, PROGRAMS, UNIVERSITY, evidence
 
 API = os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/")
 ESPERA = 900.0
@@ -62,8 +64,6 @@ def backend_disponible() -> bool:
         return False
 
 
-# Importante: no se fija una URL remota obligatoria. En localhost se conserva
-# el flujo API actual; en Cloud el fallback local evita el bloqueo de la demo.
 LOCAL_DEMO = not backend_disponible()
 
 
@@ -258,16 +258,32 @@ elif vista == "Brechas":
             if rows:
                 st.dataframe(pd.DataFrame([{"Curso":c["course_name"],"Código":c["course_code"],"Ciclo":c.get("cycle"),"Horas":c["hours"],"Tipo":tipo_txt(c.get("mandatory")),"Correspondencia":f"{c['similarity']:.2f}"} for c in rows]), use_container_width=True, hide_index=True)
             else:
-                st.warning("Ninguna asignatura supera el umbral de correspondencia.")
+                st.warning("Ninguna asignatura de la malla supera el umbral de correspondencia.")
             st.markdown("**Acción sugerida**")
-            st.info(ev.get("action") or b.get("action") or "No disponible")
+            st.info(ev.get("action") or "No disponible")
 
 else:
     st.title("Informe de sustento")
     st.caption(f"{prog} · {uni} · {datetime.now():%d/%m/%Y}")
-    st.markdown(f"### Resumen ejecutivo\n\nEl programa **{prog}** de **{uni}**, plan **{plan or 'no declarado'}**, presenta una **cobertura media del {indice:.0%}** sobre las competencias evaluadas.\n\nSe evaluaron **{len(brechas)}** competencias; **{len(criticas)}** presentan criticidad alta.")
-    tabla = pd.DataFrame([{"Competencia":b["competency"],"Criticidad":criticidad(b["severity"]),"Cobertura":f"{b.get('coverage',0):.0%}","Horas curriculares asociadas":b.get("hours_associated",0),"Tipo":"Esencial" if b["essential"] else "Complementaria"} for b in brechas])
+    st.markdown(f"""
+### Resumen ejecutivo
+
+El programa **{prog}** de **{uni}**, plan **{plan or 'no declarado'}**, presenta una **cobertura media del {indice:.0%}** sobre las competencias del estándar ocupacional pertinentes a su campo.
+
+Sobre **{len(brechas)}** competencias evaluadas, **{len(criticas)}** presentan criticidad alta y **{len(sin_cob)}** no tienen ninguna asignatura asociada por encima del umbral de correspondencia.
+
+### Competencias que requieren intervención prioritaria
+""")
+    tabla = pd.DataFrame([{"Competencia":b["competency"],"Criticidad":criticidad(b["severity"]),"Cobertura":f"{b.get('coverage',0):.0%}","Horas curriculares asociadas":b.get("hours_associated",0),"Tipo":"Esencial" if b["essential"] else "Complementaria"} for b in brechas[:20]])
     st.dataframe(tabla, use_container_width=True, hide_index=True)
-    st.download_button("Descargar informe (CSV)", tabla.to_csv(index=False).encode("utf-8"), file_name=f"brechas_{prog.replace(' ','_')}_{datetime.now():%Y%m%d}.csv", mime="text/csv", type="primary")
+    st.download_button("Descargar informe (CSV)", tabla.to_csv(index=False).encode("utf-8"), file_name=f"brechas_{prog.replace(' ', '_')}_{datetime.now():%Y%m%d}.csv", mime="text/csv", type="primary")
     st.divider()
-    st.markdown("**Horas curriculares asociadas** indican la carga de asignaturas relacionadas con la competencia; no son horas faltantes. **Cobertura** expresa la proporción estimada de tratamiento.")
+    st.markdown("""
+### Cómo leer las métricas
+
+**Horas curriculares asociadas** son las horas de las asignaturas cuya correspondencia semántica con la competencia supera el umbral. **No son horas faltantes ni un déficit**.
+
+**Cobertura** es la proporción estimada de tratamiento, entre 0 y 100 %.
+
+**Criticidad** es la prioridad de revisión: cobertura baja en una competencia esencial produce criticidad alta.
+""")
