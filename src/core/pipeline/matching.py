@@ -23,7 +23,9 @@ class Emparejador:
         cubre = self._sim >= self.umbral
         horas_cub = cubre @ self.horas if ponderar else cubre.sum(axis=1)
         maxh = horas_cub.max() or 1
-        sev = peso * (1 - horas_cub / maxh)
+        cob_h = horas_cub / maxh
+        cob_s = self._sim.max(axis=1).clip(0, 1)
+        sev = peso * (1 - 0.6 * cob_h - 0.4 * cob_s)
 
         orden = np.argsort(-sev)[:top]
         return [

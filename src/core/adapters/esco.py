@@ -23,12 +23,14 @@ class FuenteESCO:
         with open(self.base / nombre, encoding="utf-8") as f:
             return list(csv.DictReader(f))
 
+    DOMINIO = ("eléctric", "electrón", "energ", "potencia", "automatiz",
+               "control", "telecomunicac", "instrumentac", "eléctrica")
+
     def ocupaciones_ingenieria(self) -> dict[str, str]:
-        """uri -> etiqueta, solo ocupaciones de ingeniería."""
         return {
             r["conceptUri"]: _primera_forma(r["preferredLabel"])
             for r in self._leer("occupations_es.csv")
-            if "ingenier" in r["preferredLabel"].lower()
+            if any(k in r["preferredLabel"].lower() for k in self.DOMINIO)
         }
 
     def competencias(self) -> dict[str, str]:
