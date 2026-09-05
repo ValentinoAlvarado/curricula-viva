@@ -1,0 +1,45 @@
+@startuml 4_secuencia
+!include comun.puml
+title Secuencia — consulta de brechas
+
+actor "Coordinador" as C
+participant "Interfaz\nStreamlit" as UI
+participant "Emparejador" as M
+database "artifacts/\nemb.npz" as A
+
+C -> UI : selecciona programa\ny umbral
+activate UI
+
+UI -> M : Emparejador(artefacto, umbral)
+activate M
+M -> A : np.load()
+activate A
+A --> M : v_oferta, v_demanda,\nhoras, esencial
+deactivate A
+M -> M : sim = v_demanda · v_ofertaᵀ
+M --> UI : instancia lista
+deactivate M
+
+UI -> M : brechas(top, ponderar=True)
+activate M
+M -> M : cubre = sim ≥ umbral
+M -> M : horas_cub = cubre · horas
+M -> M : severidad = peso · (1 − 0.6·cobH − 0.4·cobS)
+M -> M : argsort(−severidad)[:top]
+M --> UI : lista de coberturas\ncon soporte
+deactivate M
+
+UI --> C : brechas priorizadas
+deactivate UI
+
+C -> UI : expande una brecha
+activate UI
+UI --> C : unidades de aprendizaje\nque la sostienen
+deactivate UI
+
+note over M, A
+  Ninguna llamada carga el modelo
+  de representación: solo vectores
+  precomputados. Latencia en ms.
+end note
+@enduml

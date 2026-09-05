@@ -1,0 +1,28 @@
+@startuml 7_estados
+!include comun.puml
+title Estados de una competencia frente al programa
+
+[*] --> Detectada : aparece en la\ndemanda del dominio
+
+Detectada --> Irrelevante : similitud máxima\npor debajo del piso
+Detectada --> Evaluada : similitud suficiente
+
+state Evaluada {
+  [*] --> SinCobertura
+  SinCobertura --> Marginal : alguna unidad\nsupera el umbral
+  Marginal --> Cubierta : carga horaria\nsuficiente
+  Cubierta --> Marginal : se reduce\nla carga
+  Marginal --> SinCobertura : cae bajo\nel umbral
+}
+
+SinCobertura --> [*] : brecha crítica
+Marginal --> [*] : brecha moderada
+Cubierta --> [*] : sin brecha
+Irrelevante --> [*] : fuera de alcance
+
+note right of Irrelevante
+  Evidencia medida: el ruido
+  tiene sim_max < 0.40 frente a
+  > 0.83 de lo pertinente.
+end note
+@enduml

@@ -1,3 +1,9 @@
+"""Encoding offline. NO se instancia en el servicio desplegado.
+
+El modelo pesa cientos de MB; el servicio solo consume el .npz que
+produce este modulo. Medido: 4320 textos en ~15 s en CPU.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,21 +15,29 @@ MODELO = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
 class Encoder:
-    """Encoding offline. No se instancia en el servicio desplegado."""
+    """Envuelve el bi-encoder. Vectores normalizados: coseno = producto punto."""
 
-    def __init__(self, modelo: str = MODELO) -> None:
-        self._m = SentenceTransformer(modelo)
+    def __init__(self, modelo: str = MODELO, device: str = "cpu") -> None:
+        self._m = SentenceTransformer(modelo, device=device)
 
-    def encode(self, textos: list[str]) -> np.ndarray:
+    @property
+    def dimension(self) -> int:
+        return self._m.get_embedding_dimension()
+
+    def encode(self, textos: list[str], batch_size: int = 64) -> np.ndarray:
         return self._m.encode(
-            textos, batch_size=64, normalize_embeddings=True,
+            textos,
+            batch_size=batch_size,
+            normalize_embeddings=True,
             show_progress_bar=True,
         )
 
 
 def construir_artefactos(programa, competencias, destino: Path) -> Path:
-    """Vectoriza oferta y demanda; persiste todo en un solo .npz."""
+    """Vectoriza oferta y demanda; persiste todo en un unico .npz."""
+    destino = Path(destino)
     destino.parent.mkdir(parents=True, exist_ok=True)
+
     unidades = list(programa.unidades())
     enc = Encoder()
 

@@ -1,0 +1,34 @@
+@startuml 6_despliegue
+!include comun.puml
+title Despliegue
+
+node "Máquina local" as LOCAL {
+  artifact "pipeline offline\n<size:10>requirements-dev.txt</size>" as PIPE
+  artifact "modelo MiniLM\n<size:10>caché HuggingFace, 471 MB</size>" as MODELO
+}
+
+node "GitHub" as GH {
+  artifact "código fuente" as SRC
+  artifact "artifacts/emb.npz\n<size:10>4.8 MB versionado</size>" as ART
+}
+
+node "Render" as RENDER {
+  component "servicio Streamlit\n<size:10>requirements.txt · 3 paquetes</size>" as SVC
+}
+
+node "Cliente" as CLI {
+  component "navegador" as NAV
+}
+
+MODELO --> PIPE
+PIPE --> ART : produce
+PIPE --> SRC : push
+GH --> RENDER : build automático
+SVC --> NAV : HTTPS
+
+note bottom of RENDER
+  Plan de entrada: USD 7/mes
+  512 MB RAM, sin GPU.
+  No instala torch ni el modelo.
+end note
+@enduml

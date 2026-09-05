@@ -1,0 +1,38 @@
+@startuml 5_actividad
+!include comun.puml
+title Actividad — pipeline offline
+
+|Extracción|
+start
+:recorrer data/silabos;
+repeat
+  :abrir PDF con PyMuPDF;
+  if (¿plantilla institucional reconocida?) then (sí)
+    :extraer código, créditos, ciclo;
+    if (¿tiene capítulos?) then (sí)
+      :una Unidad por capítulo;
+      :repartir horas del curso;
+    else (no)
+      :una Unidad con el CONTENIDO completo;
+    endif
+  else (no)
+    :descartar documento;
+  endif
+repeat while (¿quedan PDF?) is (sí)
+->no;
+
+|Normalización|
+:cargar occupations_es.csv;
+:filtrar ocupaciones del dominio;
+:cargar skills_es.csv;
+:unir por URI con occupationSkillRelations;
+:cortar etiquetas de género en "/";
+:marcar esencial / opcional;
+
+|Encoding|
+:vectorizar unidades;
+:vectorizar competencias;
+:normalizar vectores (coseno = producto punto);
+:guardar artifacts/emb.npz;
+stop
+@enduml

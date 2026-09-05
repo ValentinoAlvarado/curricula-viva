@@ -1,0 +1,87 @@
+@startuml 3_clases
+!include comun.puml
+title Modelo de dominio y puertos
+
+package "Dominio" {
+  class Programa {
+    +codigo : str
+    +nombre : str
+    +institucion : str
+    --
+    +horasTotales() : int
+    +unidades() : Iterator
+  }
+  class Silabo {
+    +codigo : str
+    +periodo : str
+    +creditos : int
+    --
+    +horasTotales() : int
+    +horasDonde(pred) : int
+  }
+  class Unidad {
+    +numero : int
+    +nombre : str
+    +horas : int
+    +temas : list
+    --
+    +texto : str
+  }
+  class Competencia {
+    +uri : str
+    +etiqueta : str
+    +tipo : str
+    +esencial : bool
+  }
+  class Cobertura {
+    +pesoDemanda : float
+    +horasAsignadas : int
+    +similitudMax : float
+    +unidadesSoporte : list
+  }
+}
+
+package "Puertos · polimorfismo" {
+  interface LectorSilabo <<abstract>> {
+    +clave : str
+    --
+    +acepta(ruta) : bool
+    +leer(ruta) : Silabo
+    +para(ruta)$ : LectorSilabo
+  }
+  class LectorUNI {
+    +clave = "uni"
+  }
+  class LectorOtraUniv {
+    +clave = "otra"
+  }
+  class FuenteESCO {
+    +clave = "esco"
+    --
+    +ocupaciones() : dict
+    +demanda() : list
+  }
+}
+
+Programa "1" *-- "1..*" Silabo : agrega >
+Silabo   "1" *-- "1..*" Unidad : agrega >
+Cobertura "*" --> "1" Competencia : evalúa >
+Unidad   "*" -- "*" Competencia : resuelto por Cobertura
+
+LectorSilabo <|.. LectorUNI
+LectorSilabo <|.. LectorOtraUniv
+LectorSilabo ..> Silabo : produce >
+FuenteESCO ..> Competencia : produce >
+
+note right of LectorSilabo
+  Auto-registro con __init_subclass__.
+  Añadir una universidad = una subclase.
+  El pipeline no se modifica.
+end note
+
+note bottom of Cobertura
+  severidad = f(pesoDemanda, horasAsignadas)
+  Alta demanda + baja carga horaria
+  = **brecha prioritaria**
+end note
+@enduml

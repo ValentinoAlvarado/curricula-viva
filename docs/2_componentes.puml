@@ -1,0 +1,39 @@
+@startuml 2_componentes
+!include comun.puml
+title Componentes y frontera de despliegue
+left to right direction
+
+package "Offline · máquina local" {
+  database "Sílabos PDF\n270 documentos" as PDF
+  database "ESCO v1.2.1 (es)\n3 CSV" as ESCO
+  component "Extracción\n<size:10>PyMuPDF + regex</size>"        as EXT
+  component "Normalización\n<size:10>unión por URI</size>"       as NORM
+  component "Encoding\n<size:10>MiniLM multilingüe</size>"       as EMB
+}
+
+artifact "artifacts/emb.npz" as VEC
+
+package "Online · servicio desplegado" {
+  component "Emparejamiento\n<size:10>coseno + umbral</size>"          as MATCH
+  component "Ponderación\n<size:10>por carga horaria</size>"           as POND
+  component "Informe de brechas\n<size:10>trazable a unidades</size>"  as REP
+  component "Interfaz Streamlit"                                       as UI
+}
+
+PDF  --> EXT
+ESCO --> NORM
+EXT  --> NORM
+NORM --> EMB
+EMB  --> VEC
+VEC  --> MATCH
+MATCH --> POND
+POND --> REP
+REP  --> UI
+
+note right of VEC
+  Frontera de despliegue.
+  El servicio NO carga el modelo:
+  runtime de 3 paquetes, sin torch.
+  Costo marginal por consulta ~ 0
+end note
+@enduml

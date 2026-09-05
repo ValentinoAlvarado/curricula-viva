@@ -1,0 +1,36 @@
+@startuml 1_casos_uso
+!include comun.puml
+title Casos de uso — Currícula Viva
+left to right direction
+
+actor "Coordinador\nde escuela" as COORD
+actor "Comité de\ncurrículo" as COMITE
+actor "Taxonomía ESCO" as ESCO
+
+rectangle "Sistema de medición de brecha curricular" {
+  usecase "Cargar sílabos\ndel programa"     as UC1
+  usecase "Consultar brechas\npriorizadas"   as UC2
+  usecase "Rastrear evidencia\npor unidad"   as UC3
+  usecase "Exportar informe\nde sustento"    as UC4
+  usecase "Comparar contra\nlínea base"      as UC5
+  usecase "Ajustar umbral\nde similitud"     as UC6
+}
+
+COORD  --> UC1
+COORD  --> UC2
+COORD  --> UC4
+COORD  --> UC6
+COMITE --> UC2
+COMITE --> UC4
+UC2 <-- ESCO
+
+UC2 ..> UC3 : <<extend>>
+UC2 ..> UC5 : <<extend>>
+UC4 ..> UC2 : <<include>>
+
+note bottom of UC5
+  Emparejamiento binario
+  sin ponderación horaria:
+  contrasta la hipótesis H.E.3
+end note
+@enduml

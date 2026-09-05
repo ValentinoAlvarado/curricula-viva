@@ -6,4 +6,5 @@ __pycache__/
 .ruff_cache/
 .env
 data/
-artifacts/
+artifacts/*
+!artifacts/emb.npz

@@ -1,0 +1,88 @@
+' ═══════════════════════════════════════════════════════════
+'  Paleta y estilos comunes — Currícula Viva
+'  Se incluye con: !include comun.puml
+' ═══════════════════════════════════════════════════════════
+!define AZUL     #1F3864
+!define ACENTO   #0E7C7B
+!define SUAVE    #EAF2F8
+!define VERDE    #E8F5E9
+!define AMBAR    #FFF4D6
+!define GRIS     #F5F5F5
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam ArrowColor AZUL
+skinparam ArrowFontSize 11
+
+skinparam actor {
+  BackgroundColor SUAVE
+  BorderColor AZUL
+  FontColor AZUL
+}
+skinparam usecase {
+  BackgroundColor SUAVE
+  BorderColor ACENTO
+  BorderThickness 1.2
+  FontColor #1A1A1A
+}
+skinparam component {
+  BackgroundColor SUAVE
+  BorderColor ACENTO
+  BorderThickness 1.2
+}
+skinparam artifact {
+  BackgroundColor AMBAR
+  BorderColor #B8860B
+}
+skinparam database {
+  BackgroundColor SUAVE
+  BorderColor AZUL
+}
+skinparam class {
+  BackgroundColor SUAVE
+  BorderColor ACENTO
+  BorderThickness 1.2
+  HeaderBackgroundColor #D6E4F0
+  AttributeFontSize 11
+}
+skinparam interface {
+  BackgroundColor VERDE
+  BorderColor AZUL
+}
+skinparam package {
+  BackgroundColor transparent
+  BorderColor AZUL
+  FontColor AZUL
+  FontStyle bold
+  BorderThickness 1.4
+}
+skinparam note {
+  BackgroundColor AMBAR
+  BorderColor #B8860B
+}
+skinparam sequence {
+  ParticipantBackgroundColor SUAVE
+  ParticipantBorderColor ACENTO
+  ActorBackgroundColor SUAVE
+  ActorBorderColor AZUL
+  LifeLineBorderColor AZUL
+  ArrowColor AZUL
+  BoxBackgroundColor GRIS
+  BoxBorderColor AZUL
+}
+skinparam activity {
+  BackgroundColor SUAVE
+  BorderColor ACENTO
+  DiamondBackgroundColor AMBAR
+  DiamondBorderColor #B8860B
+}
+skinparam state {
+  BackgroundColor SUAVE
+  BorderColor ACENTO
+}
+skinparam node {
+  BackgroundColor GRIS
+  BorderColor AZUL
+}
