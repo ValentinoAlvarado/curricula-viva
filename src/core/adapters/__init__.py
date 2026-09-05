@@ -1,5 +1,5 @@
 """Importar aqui registra las implementaciones en el registro de base."""
-
+from .plan import LectorPlanUNI
 from .base import (
     FormatoNoReconocido,
     LectorSilabo,
