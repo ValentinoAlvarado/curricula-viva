@@ -1,15 +1,15 @@
 """Lector de planes de estudio UNI.
 
-A diferencia del silabo, el plan declara las horas REALES de cada curso:
-teoria (HT), practica (HP) y laboratorio (HL). No hay que estimarlas.
+El plan declara las horas REALES de cada curso: teoria (HT), practica (HP)
+y laboratorio (HL). Tambien el ciclo y si el curso es obligatorio o
+electivo. Nada de eso se estima.
 
-Formato verificado sobre los tres planes de la FIEE:
-    COD  CURSO  TIPO  SIST.EVAL  HT  HP  HL  CRED  PRE-REQUISITO
+Estructura verificada sobre los tres planes de la FIEE: diez bloques de
+tabla, uno por ciclo, seguidos de un bloque de electivos.
 
-Resultados de la extraccion:
-    Electrica 2018-2      104 cursos, 461 h semanales
-    Electronica 2018-2    113 cursos, 501 h semanales
-    Telecomunicaciones    106 cursos, 463 h semanales
+    Electrica 2018-2      104 cursos | 10 ciclos + 55 electivos
+    Electronica 2018-2    112 cursos | 10 ciclos + 66 electivos
+    Telecomunicaciones    106 cursos | 10 ciclos + 58 electivos
 """
 
 from __future__ import annotations
@@ -28,15 +28,13 @@ RE_CURSO = re.compile(
     r"(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+)$",
     re.M,
 )
+RE_CABECERA = re.compile(r"^COD\s+CURSO\s+TIPO", re.M)
 RE_PLAN = re.compile(r"(\d{4}-\d)")
-# El titulo aparece junto al periodo; en algunos planes el texto extraido
-# arrastra los rotulos de ciclo, asi que se recorta desde "INGENIERIA".
-RE_ESCUELA = re.compile(
-    r"(INGENIER[ÍI]A[^\n]{0,60}?)\s*\d{4}-\d", re.I
-)
+RE_ESCUELA = re.compile(r"(INGENIER[ÍI]A[^\n]{0,60}?)\s*\d{4}-\d", re.I)
 
 SEMANAS = 17
-OBLIGATORIO, ELECTIVO = "O", "E"
+CICLOS_MALLA = 10
+OBLIGATORIO = "O"
 
 
 def _sin_tildes(t: str) -> str:
@@ -60,15 +58,13 @@ class LectorPlanUNI(LectorSilabo):
         return "PLAN DE ESTUDIOS" in t and "PRE-REQUISITO" in t
 
     def leer(self, ruta: Path) -> Silabo:
-        """Compatibilidad con el puerto: devuelve el plan como un Silabo."""
         p = self.leer_programa(ruta)
         return p.silabos[0] if p.silabos else Silabo(
-            codigo="?", nombre=ruta.stem, institucion="FIEE-UNI"
-        )
+            codigo="?", nombre=ruta.stem, institucion="FIEE-UNI")
 
     # ── API propia ────────────────────────────────────────────────
     def leer_programa(self, ruta: Path, institucion: str = "FIEE-UNI") -> Programa:
-        """Un curso -> un Silabo con una Unidad de horas reales."""
+        """Un curso -> un Silabo con ciclo, tipo y horas reales."""
         with pymupdf.open(ruta) as doc:
             texto = "\n".join(p.get_text() for p in doc)
 
@@ -77,33 +73,54 @@ class LectorPlanUNI(LectorSilabo):
         silabos: list[Silabo] = []
         vistos: set[str] = set()
 
-        for m in RE_CURSO.finditer(texto):
-            cod, curso, tipo, _sist, ht, hp, hl, cred, _pre = m.groups()
-            if cod in vistos:
-                continue
-            vistos.add(cod)
+        for ciclo, bloque in self._bloques(texto):
+            for m in RE_CURSO.finditer(bloque):
+                cod, curso, tipo, _sist, ht, hp, hl, cred, _pre = m.groups()
+                if cod in vistos:
+                    continue
+                vistos.add(cod)
 
-            horas_sem = int(ht) + int(hp) + int(hl)
-            if horas_sem == 0:
-                continue
+                horas_sem = int(ht) + int(hp) + int(hl)
+                if horas_sem == 0:
+                    continue
 
-            silabos.append(Silabo(
-                codigo=cod,
-                nombre=curso.strip().title(),
-                institucion=institucion,
-                periodo=periodo,
-                creditos=int(cred),
-                unidades=[Unidad(
-                    numero=1,
+                obligatorio = tipo == OBLIGATORIO
+                silabos.append(Silabo(
+                    codigo=cod,
                     nombre=curso.strip().title(),
-                    horas=horas_sem * SEMANAS,
-                    temas=[curso.strip().lower(),
-                           "obligatorio" if tipo == OBLIGATORIO else "electivo"],
-                )],
-            ))
+                    institucion=institucion,
+                    periodo=periodo,
+                    creditos=int(cred),
+                    ciclo=ciclo,
+                    obligatorio=obligatorio,
+                    unidades=[Unidad(
+                        numero=1,
+                        nombre=curso.strip().title(),
+                        horas=horas_sem * SEMANAS,
+                        temas=[curso.strip().lower()],
+                    )],
+                ))
 
         return Programa(codigo=self._codigo(nombre), nombre=nombre,
                         institucion=institucion, silabos=silabos)
+
+    @staticmethod
+    def _bloques(texto: str) -> list[tuple[int | None, str]]:
+        """Divide el plan en sus tablas.
+
+        Los diez primeros bloques son los ciclos 1..10 en orden; el resto
+        son cursos electivos, que no pertenecen a un ciclo fijo.
+        """
+        inicios = [m.start() for m in RE_CABECERA.finditer(texto)]
+        if not inicios:
+            return [(None, texto)]
+
+        out: list[tuple[int | None, str]] = []
+        for i, ini in enumerate(inicios):
+            fin = inicios[i + 1] if i + 1 < len(inicios) else len(texto)
+            ciclo = i + 1 if i < CICLOS_MALLA else None
+            out.append((ciclo, texto[ini:fin]))
+        return out
 
     @staticmethod
     def _periodo(texto: str) -> str | None:
@@ -112,10 +129,8 @@ class LectorPlanUNI(LectorSilabo):
 
     @staticmethod
     def _escuela(texto: str, ruta: Path) -> str:
-        """Nombre de la escuela profesional, limpio de rotulos de ciclo."""
         for m in RE_ESCUELA.finditer(texto):
             limpio = " ".join(m.group(1).split())
-            # descarta capturas contaminadas por los rotulos de ciclo
             if _sin_tildes(limpio).upper().count("CICLO"):
                 continue
             if 8 < len(limpio) < 60:

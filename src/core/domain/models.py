@@ -26,13 +26,19 @@ class Unidad(BaseModel):
 
 
 class Silabo(BaseModel):
-    """Un curso. Agrega 1..* Unidad."""
+    """Un curso. Agrega 1..* Unidad.
+
+    ciclo y obligatorio provienen del plan de estudios. Quedan en None
+    cuando el documento no los declara: no se infieren.
+    """
 
     codigo: str
     nombre: str
     institucion: str
     periodo: str | None = None
     creditos: int | None = None
+    ciclo: int | None = None
+    obligatorio: bool | None = None
     unidades: list[Unidad] = Field(default_factory=list)
 
     @property

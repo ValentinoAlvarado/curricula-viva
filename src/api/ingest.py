@@ -183,27 +183,41 @@ def ingerir_silabos(sesion: Session, program: Program) -> int:
 
 
 def ingerir_competencias(sesion: Session) -> int:
-    """ESCO -> esco_competencies, con frecuencia de demanda."""
+    """ESCO -> esco_competencies.
+
+    Guarda tambien que ocupaciones requieren cada competencia: es el dato
+    que responde "para que perfil profesional es relevante". Sale de
+    occupationSkillRelations, no se infiere.
+    """
     fuente = FuenteESCO(ESCO)
     ocup = fuente.ocupaciones()
     skills = fuente.competencias()
 
     frecuencia: dict[str, int] = {}
+    perfiles: dict[str, list[str]] = {}
     for r in fuente._leer("occupationSkillRelations_es.csv"):
-        if r["occupationUri"] in ocup and r["skillUri"] in skills:
-            frecuencia[r["skillUri"]] = frecuencia.get(r["skillUri"], 0) + 1
+        uri, ocu = r["skillUri"], r["occupationUri"]
+        if ocu not in ocup or uri not in skills:
+            continue
+        frecuencia[uri] = frecuencia.get(uri, 0) + 1
+        lista = perfiles.setdefault(uri, [])
+        etiqueta = ocup[ocu]
+        if etiqueta not in lista and len(lista) < 8:
+            lista.append(etiqueta)
 
-    existentes = {
-        c.uri: c for c in sesion.exec(select(EscoCompetency)).all()
-    }
+    existentes = {c.uri: c for c in sesion.exec(select(EscoCompetency)).all()}
     n = 0
     for c in fuente.demanda():
+        ocs = "|".join(perfiles.get(c.uri, []))
         if c.uri in existentes:
             existentes[c.uri].occupation_count = frecuencia.get(c.uri, 0)
+            existentes[c.uri].occupations = ocs
+            sesion.add(existentes[c.uri])
             continue
         sesion.add(EscoCompetency(
             uri=c.uri, label=c.etiqueta, skill_type=c.tipo,
             essential=c.esencial, occupation_count=frecuencia.get(c.uri, 0),
+            occupations=ocs,
         ))
         n += 1
 
@@ -230,6 +244,7 @@ def _programa_de_bd(sesion: Session, program: Program) -> Programa:
         silabos.append(SilaboDom(
             codigo=c.code, nombre=c.name, institucion=program.code,
             periodo=c.period, creditos=c.credits,
+            ciclo=c.cycle, obligatorio=c.mandatory,
             unidades=[UnidadDom(numero=u.number, nombre=u.name,
                                 horas=u.hours, temas=u.topics or [])
                       for u in unidades],
@@ -278,7 +293,8 @@ def ejecutar_analisis(sesion: Session, analysis: Analysis,
                 continue
             sesion.add(Gap(
                 analysis_id=analysis.id, competency_id=comp.id,
-                severity=b["severidad"], hours_covered=b["horas_cubiertas"],
+                severity=b["severidad"], coverage=b["cobertura"],
+                hours_covered=b["horas_asociadas"],
                 max_similarity=b["similitud_max"], rank=i,
             ))
             for s in b["soporte"]:

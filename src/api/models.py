@@ -1,12 +1,9 @@
 """Tablas del dominio de negocio.
 
-Los embeddings NO se guardan aqui: viven en artifacts/emb.npz como
-artefacto del pipeline offline. La base persiste datos de negocio y
-resultados de analisis, no vectores.
+Los embeddings viven en artifacts/*.npz. La base persiste datos de
+negocio y resultados de analisis, no vectores.
 
-Cada Analysis registra la version del algoritmo que lo produjo. Si el
-algoritmo cambia, los resultados previos quedan marcados como obsoletos
-y la aplicacion recalcula sin intervencion manual.
+Cada Analysis registra la version del algoritmo que lo produjo.
 """
 
 from __future__ import annotations
@@ -43,6 +40,8 @@ class Program(SQLModel, table=True):
 
 
 class Syllabus(SQLModel, table=True):
+    """Asignatura del plan. ciclo y tipo provienen del documento."""
+
     __tablename__ = "syllabi"
 
     id: int | None = Field(default=None, primary_key=True)
@@ -51,6 +50,8 @@ class Syllabus(SQLModel, table=True):
     name: str
     credits: int | None = None
     period: str | None = None
+    cycle: int | None = None          # 1..10; None si es electivo
+    mandatory: bool | None = None     # None si el plan no lo declara
     source_path: str | None = None
 
 
@@ -74,6 +75,8 @@ class EscoCompetency(SQLModel, table=True):
     skill_type: str = ""
     essential: bool = False
     occupation_count: int = 0
+    # Ocupaciones que la requieren, separadas por "|". Fuente: ESCO.
+    occupations: str = ""
 
 
 class Analysis(SQLModel, table=True):
@@ -87,18 +90,25 @@ class Analysis(SQLModel, table=True):
     floor: float = 0.55
     weighted: bool = True
     artifact_hash: str | None = None
-    engine_version: str = ""   # version del algoritmo que lo calculo
+    engine_version: str = ""
     error: str | None = None
 
 
 class Gap(SQLModel, table=True):
+    """Cobertura de una competencia por la malla.
+
+    hours_covered NO son horas faltantes: son las horas curriculares de
+    las asignaturas asociadas a la competencia por encima del umbral.
+    """
+
     __tablename__ = "gaps"
 
     id: int | None = Field(default=None, primary_key=True)
     analysis_id: int = Field(foreign_key="analyses.id", index=True)
     competency_id: int = Field(foreign_key="esco_competencies.id", index=True)
     severity: float
-    hours_covered: int
+    coverage: float = 0.0        # 0..1, proporcion de cobertura estimada
+    hours_covered: int           # horas curriculares asociadas
     max_similarity: float
     rank: int
 

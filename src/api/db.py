@@ -37,6 +37,14 @@ _MIGRACIONES: dict[str, dict[str, str]] = {
     },
     "esco_competencies": {
         "occupation_count": "INTEGER DEFAULT 0",
+        "occupations": "VARCHAR DEFAULT ''",
+    },
+    "syllabi": {
+        "cycle": "INTEGER",
+        "mandatory": "BOOLEAN",
+    },
+    "gaps": {
+        "coverage": "FLOAT DEFAULT 0",
     },
 }
 

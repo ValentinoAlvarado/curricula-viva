@@ -183,26 +183,24 @@ def salud():
 
 def semaforo(sev: float) -> tuple[str, str]:
     if sev > 0.6:
-        return "Crítica", "cv-critica"
+        return "Alta", "cv-critica"
     if sev > 0.35:
-        return "Moderada", "cv-media"
-    return "Menor", "cv-baja"
+        return "Media", "cv-media"
+    return "Baja", "cv-baja"
 
 
-def recomendacion(b: dict) -> str:
-    horas, sev = b["hours_covered"], b["severity"]
-    if horas == 0:
-        return ("Ninguna asignatura del plan aborda esta competencia. "
-                "Requiere incorporación explícita en un curso existente "
-                "o creación de contenido nuevo.")
-    if sev > 0.6:
-        return (f"Presencia marginal ({horas} h). Conviene ampliar la carga "
-                "horaria o profundizar el tratamiento en las asignaturas "
-                "que ya la abordan.")
-    if sev > 0.35:
-        return ("Cobertura parcial. Revisar si el nivel de profundidad "
-                "corresponde a lo que exige el perfil ocupacional.")
-    return "Cobertura suficiente. Sin acción requerida en este ciclo."
+def criticidad(sev: float) -> str:
+    return "Alta" if sev > 0.6 else "Media" if sev > 0.35 else "Baja"
+
+
+def ciclo_txt(c) -> str:
+    return str(c) if c else "Electivo"
+
+
+def tipo_txt(m) -> str:
+    if m is None:
+        return "No disponible"
+    return "Obligatorio" if m else "Electivo"
 
 
 # ═════════════════════════════════════════════════════════════
@@ -299,8 +297,8 @@ ultimo = max(prev, key=lambda a: a["id"])
 aid = ultimo["id"]
 brechas = consultar(f"/analyses/{aid}/gaps", top=500)
 criticas = [b for b in brechas if b["severity"] > 0.6]
-sin_cob = [b for b in brechas if b["hours_covered"] == 0]
-indice = (round(1 - sum(b["severity"] for b in brechas) / len(brechas), 3)
+sin_cob = [b for b in brechas if b.get("hours_associated", 0) == 0]
+indice = (round(sum(b.get("coverage", 0) for b in brechas) / len(brechas), 3)
           if brechas else 0.0)
 
 
@@ -316,13 +314,18 @@ if vista == "Diagnóstico":
 
     st.divider()
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Índice de alineamiento", f"{indice:.0%}",
-              help="Proporción de la demanda ocupacional cubierta por la malla")
-    k2.metric("Competencias evaluadas", len(brechas))
-    k3.metric("Brechas críticas", len(criticas),
+    k1.metric("Cobertura media del plan", f"{indice:.0%}",
+              help="Media de la cobertura estimada sobre las competencias "
+                   "pertinentes al campo del programa")
+    k2.metric("Competencias evaluadas", len(brechas),
+              help="Competencias del estándar ocupacional pertinentes al "
+                   "campo. Las ajenas se descartan antes de evaluar")
+    k3.metric("Criticidad alta", len(criticas),
               delta=f"{len(criticas)/len(brechas):.0%}" if brechas else None,
-              delta_color="inverse")
-    k4.metric("Sin cobertura", len(sin_cob), delta_color="inverse")
+              delta_color="inverse",
+              help="Competencias con cobertura baja y carácter esencial")
+    k4.metric("Sin asignatura asociada", len(sin_cob), delta_color="inverse",
+              help="Ninguna asignatura supera el umbral de correspondencia")
 
     st.divider()
     izq, der = st.columns([3, 2])
@@ -335,7 +338,8 @@ if vista == "Diagnóstico":
             st.markdown(
                 f"<div class='{clase}'><b>{b['competency']}</b><br>"
                 f"<span style='color:#8b95a1;font-size:.85rem'>"
-                f"{nivel} · {b['hours_covered']} h en la malla · "
+                f"Criticidad {nivel} · Cobertura {b.get('coverage', 0):.0%} · "
+                f"{b.get('hours_associated', 0)} h curriculares asociadas · "
                 f"{'esencial' if b['essential'] else 'complementaria'}"
                 f"</span></div>", unsafe_allow_html=True)
             st.write("")
@@ -347,7 +351,8 @@ if vista == "Diagnóstico":
             "Competencias": [
                 len(sin_cob),
                 len([b for b in brechas
-                     if b["hours_covered"] > 0 and b["severity"] > 0.35]),
+                     if b.get("hours_associated", 0) > 0
+                     and b["severity"] > 0.35]),
                 len([b for b in brechas if b["severity"] <= 0.35]),
             ],
         }).set_index("Estado"), height=260)
@@ -355,17 +360,20 @@ if vista == "Diagnóstico":
     st.divider()
     st.subheader("Lectura del diagnóstico")
     if indice >= 0.7:
-        st.success(f"La malla cubre el {indice:.0%} de la demanda ocupacional "
-                   f"evaluada. Las {len(criticas)} brechas críticas son "
-                   "abordables mediante ajustes de contenido.")
+        st.success(
+            f"Cobertura media del {indice:.0%} sobre {len(brechas)} "
+            f"competencias pertinentes. Las {len(criticas)} de criticidad "
+            "alta son abordables mediante ajustes de contenido.")
     elif indice >= 0.45:
-        st.warning(f"Cobertura del {indice:.0%}. Hay {len(criticas)} "
-                   f"competencias con tratamiento insuficiente y {len(sin_cob)} "
-                   "sin presencia en la malla. Se recomienda una revisión "
-                   "focalizada antes del próximo ciclo.")
+        st.warning(
+            f"Cobertura media del {indice:.0%}. Hay {len(criticas)} "
+            f"competencias de criticidad alta y {len(sin_cob)} sin ninguna "
+            "asignatura asociada. Se recomienda una revisión focalizada "
+            "antes del próximo ciclo.")
     else:
-        st.error(f"Cobertura del {indice:.0%}. La distancia respecto al perfil "
-                 "ocupacional sugiere una revisión estructural del plan.")
+        st.error(
+            f"Cobertura media del {indice:.0%}. La distancia respecto al "
+            "perfil ocupacional sugiere una revisión estructural del plan.")
 
 
 # ═════════════════════════════════════════════════════════════
@@ -393,29 +401,75 @@ elif vista == "Brechas":
 
     for b in vis[:40]:
         nivel, _ = semaforo(b["severity"])
-        with st.expander(f"{b['competency']}  ·  {nivel}  ·  "
-                         f"{b['hours_covered']} h"):
-            a, c = st.columns([1, 3])
-            with a:
-                st.metric("Severidad", f"{b['severity']:.2f}")
-                st.metric("Horas en la malla", b["hours_covered"])
-                st.caption("Esencial" if b["essential"] else "Complementaria")
-            with c:
-                st.markdown("**Recomendación**")
-                st.info(recomendacion(b))
-                st.markdown("**Evidencia curricular**")
-                ev = consultar(f"/gaps/{b['id']}/evidence",
-                               alterno={"units": []})
-                if ev["units"]:
-                    st.dataframe(pd.DataFrame([{
-                        "Código": u["syllabus_code"],
-                        "Asignatura": u["syllabus_name"],
-                        "Horas": u["hours"],
-                    } for u in ev["units"]]),
-                        use_container_width=True, hide_index=True)
+        cob = b.get("coverage", 0)
+        with st.expander(
+            f"{b['competency']}  ·  Criticidad {nivel}  ·  "
+            f"Cobertura {cob:.0%}"
+        ):
+            ev = consultar(f"/gaps/{b['id']}/evidence", alterno={})
+            cursos = ev.get("courses", [])
+
+            st.markdown("**¿Por qué aparece esta competencia?**")
+            st.caption(
+                f"El estándar ocupacional la asocia a perfiles del campo del "
+                f"programa. La malla dedica "
+                f"{b.get('hours_associated', 0)} horas curriculares a "
+                f"asignaturas cuya correspondencia semántica con ella supera "
+                f"el umbral, lo que arroja una cobertura estimada del "
+                f"{cob:.0%}."
+            )
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Cobertura curricular", f"{cob:.0%}")
+            m2.metric("Horas curriculares asociadas",
+                      b.get("hours_associated", 0),
+                      help="Horas de las asignaturas asociadas. "
+                           "NO son horas faltantes.")
+            m3.metric("Criticidad", nivel)
+
+            st.markdown("**Cobertura encontrada**")
+            if cursos:
+                st.dataframe(pd.DataFrame([{
+                    "Curso": c["course_name"],
+                    "Código": c["course_code"],
+                    "Ciclo": ciclo_txt(c.get("cycle")),
+                    "Horas": c["hours"],
+                    "Tipo": tipo_txt(c.get("mandatory")),
+                    "Correspondencia": f"{c['similarity']:.2f}",
+                } for c in cursos]), use_container_width=True,
+                    hide_index=True)
+            else:
+                st.warning("Ninguna asignatura de la malla supera el umbral "
+                           "de correspondencia con esta competencia.")
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Competencia ESCO**")
+                st.write(ev.get("competency", b["competency"]))
+                st.caption("Esencial para el perfil"
+                           if b["essential"] else "Complementaria")
+            with c2:
+                st.markdown("**Relevancia profesional**")
+                ocs = ev.get("occupations") or b.get("occupations") or []
+                if ocs:
+                    for o in ocs:
+                        st.write(f"· {o}")
                 else:
-                    st.warning("Ninguna asignatura de la malla aborda esta "
-                               "competencia.")
+                    st.caption("No disponible")
+
+            st.markdown("**Evidencia curricular**")
+            if cursos:
+                for c in cursos[:3]:
+                    st.caption(
+                        f"{c['course_code']} — {c['unit_name']} · "
+                        f"Ciclo {ciclo_txt(c.get('cycle'))} · "
+                        f"{tipo_txt(c.get('mandatory'))} · {c['hours']} h"
+                    )
+            else:
+                st.caption("No disponible")
+
+            st.markdown("**Acción sugerida**")
+            st.info(ev.get("action") or "No disponible")
 
 
 # ═════════════════════════════════════════════════════════════
@@ -427,19 +481,21 @@ elif vista == "Informe":
 ### Resumen ejecutivo
 
 El programa **{prog}** de **{uni}**, plan **{plan or 'no declarado'}**,
-presenta un índice de alineamiento del **{indice:.0%}** respecto al estándar
-ocupacional de referencia.
+presenta una **cobertura media del {indice:.0%}** sobre las competencias del
+estándar ocupacional pertinentes a su campo.
 
 Sobre **{len(brechas)}** competencias evaluadas, **{len(criticas)}** presentan
-severidad crítica y **{len(sin_cob)}** no tienen presencia alguna en la malla.
+criticidad alta y **{len(sin_cob)}** no tienen ninguna asignatura asociada por
+encima del umbral de correspondencia.
 
 ### Competencias que requieren intervención prioritaria
 """)
 
     tabla = pd.DataFrame([{
         "Competencia": b["competency"],
-        "Severidad": round(b["severity"], 2),
-        "Horas en la malla": b["hours_covered"],
+        "Criticidad": criticidad(b["severity"]),
+        "Cobertura": f"{b.get('coverage', 0):.0%}",
+        "Horas curriculares asociadas": b.get("hours_associated", 0),
         "Tipo": "Esencial" if b["essential"] else "Complementaria",
     } for b in brechas[:20]])
     st.dataframe(tabla, use_container_width=True, hide_index=True)
@@ -452,6 +508,20 @@ severidad crítica y **{len(sin_cob)}** no tienen presencia alguna en la malla.
 
     st.divider()
     st.markdown("""
+### Cómo leer las métricas
+
+**Horas curriculares asociadas** son las horas de las asignaturas cuya
+correspondencia semántica con la competencia supera el umbral. **No son horas
+faltantes ni un déficit**: indican cuánta carga del plan está relacionada con
+esa competencia.
+
+**Cobertura** es la proporción estimada de tratamiento, entre 0 y 100 %.
+Combina la carga horaria asociada, la estrechez de la correspondencia y la
+afinidad con el campo del programa.
+
+**Criticidad** es la prioridad de revisión: cobertura baja en una competencia
+esencial produce criticidad alta.
+
 ### Metodología
 
 Cada asignatura del plan y cada competencia del estándar ocupacional se

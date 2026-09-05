@@ -1,8 +1,4 @@
-"""Ejecucion y consulta de analisis, con trazabilidad.
-
-Un analisis calculado con una version anterior del algoritmo se marca
-como obsoleto. La aplicacion lo detecta y recalcula.
-"""
+"""Ejecucion y consulta de analisis, con evidencia interpretable."""
 
 from __future__ import annotations
 
@@ -22,9 +18,40 @@ from ..models import (
     Program,
     Syllabus,
 )
-from ..schemas import AnalysisIn, AnalysisOut, EvidenceOut, EvidenceUnit, GapOut
+from ..schemas import (
+    AnalysisIn,
+    AnalysisOut,
+    EvidenceCourse,
+    EvidenceOut,
+    GapOut,
+)
 
 router = APIRouter(tags=["analyses"])
+MAX_OCUPACIONES = 5
+
+
+def _ocupaciones(c: EscoCompetency) -> list[str]:
+    if not c.occupations:
+        return []
+    return [o for o in c.occupations.split("|") if o][:MAX_OCUPACIONES]
+
+
+def _accion(g: Gap, esencial: bool, n_cursos: int) -> str:
+    """Accion sugerida a partir de la cobertura medida."""
+    if n_cursos == 0:
+        return ("Ninguna asignatura del plan aborda esta competencia por "
+                "encima del umbral. Evaluar su incorporación en un curso "
+                "existente o la creación de contenido nuevo.")
+    grado = "esencial" if esencial else "complementaria"
+    if g.coverage < 0.35:
+        return (f"Cobertura baja ({g.coverage:.0%}) para una competencia "
+                f"{grado}. Revisar la profundidad del tratamiento en las "
+                "asignaturas indicadas.")
+    if g.coverage < 0.6:
+        return (f"Cobertura parcial ({g.coverage:.0%}). Contrastar el nivel "
+                "alcanzado con el que exige el perfil ocupacional.")
+    return (f"Cobertura suficiente ({g.coverage:.0%}). Sin acción requerida "
+            "en este ciclo.")
 
 
 def _salida(a: Analysis, s: Session) -> AnalysisOut:
@@ -97,8 +124,9 @@ def brechas(aid: int, top: int = 15, min_severity: float = 0.0,
     return [
         GapOut(
             id=g.id, rank=g.rank, competency=c.label, essential=c.essential,
-            severity=g.severity, hours_covered=g.hours_covered,
-            max_similarity=g.max_similarity,
+            severity=g.severity, coverage=g.coverage,
+            hours_associated=g.hours_covered,
+            max_similarity=g.max_similarity, occupations=_ocupaciones(c),
         )
         for g, c in filas
     ]
@@ -106,7 +134,7 @@ def brechas(aid: int, top: int = 15, min_severity: float = 0.0,
 
 @router.get("/gaps/{gid}/evidence")
 def evidencia(gid: int, s: Session = Depends(get_session)) -> EvidenceOut:
-    """Trazabilidad: cursos que sostienen la brecha."""
+    """Trazabilidad completa: asignaturas, ciclo, tipo y perfiles."""
     g = s.get(Gap, gid)
     if not g:
         raise HTTPException(404, "Brecha no encontrada")
@@ -121,14 +149,18 @@ def evidencia(gid: int, s: Session = Depends(get_session)) -> EvidenceOut:
         .order_by(col(Match.similarity).desc())
     ).all()
 
+    cursos = [
+        EvidenceCourse(
+            unit_id=u.id, course_code=sy.code, course_name=sy.name,
+            unit_name=u.name, cycle=sy.cycle, mandatory=sy.mandatory,
+            hours=u.hours, similarity=m.similarity,
+        )
+        for m, u, sy in filas
+    ]
+
     return EvidenceOut(
         gap_id=g.id, competency=comp.label, severity=g.severity,
-        hours_covered=g.hours_covered,
-        units=[
-            EvidenceUnit(
-                unit_id=u.id, unit_name=u.name, syllabus_code=sy.code,
-                syllabus_name=sy.name, hours=u.hours, similarity=m.similarity,
-            )
-            for m, u, sy in filas
-        ],
+        coverage=g.coverage, hours_associated=g.hours_covered,
+        essential=comp.essential, occupations=_ocupaciones(comp),
+        courses=cursos, action=_accion(g, comp.essential, len(cursos)),
     )
